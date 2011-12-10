@@ -106,6 +106,10 @@ int main(int argc, char ** argv)
         fprintf(stderr, "invalid integer literal for -n parameter.\n");
         usage(argv[0]);
       }
+      if (repeats<=0 || repeats>10000) {
+        fprintf(stderr, "invalid value for -n parameter. Must be in the range [1-10000].\n");
+        usage(argv[0]);
+      }
       break;
     case 'h':
      fmt=CSF_HUMAN;
