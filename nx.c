@@ -26,13 +26,7 @@ typedef struct  {
 
 float timeval_to_sec(struct timeval* tv)
 {
-  char buffer[100];
-  snprintf(buffer, 100, "%9ld.%02ld", 
-           (long)tv->tv_sec, (long)tv->tv_usec/10000);
-  char* end_ptr=NULL;
-  float sec=strtof(buffer, &end_ptr);
-  assert(*end_ptr=='\0');
-  return sec;
+  return (float)tv->tv_sec+0.000001*(float)tv->tv_usec;
 }
 
 typedef enum {
