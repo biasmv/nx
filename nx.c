@@ -3,7 +3,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -130,19 +129,19 @@ int main(int argc, char ** argv)
   callstat_print_head(stdout, fmt);
 
   for (; repeat<repeats; ++repeat) {
-    gettimeofday(&before, (struct timezone *)NULL);
+    gettimeofday(&before, NULL);
     switch(pid = vfork()) {
-      case -1:      /* error */
+      case -1:
         perror("nx");
         exit(1);
-      case 0:       /* child */
+      case 0:
         execvp(*argv, argv);
         perror(*argv);
         _exit((errno == ENOENT) ? 127 : 126);
     }
 
     while (wait3(&status, 0, &ru) != pid);
-    gettimeofday(&after, (struct timezone *)NULL);
+    gettimeofday(&after, NULL);
     if (!WIFEXITED(status))
       fprintf(stderr, "Command terminated abnormally.\n");
     timersub(&after, &before, &after);
