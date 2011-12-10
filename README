@@ -1,0 +1,13 @@
+What's this?
+=================================================
+
+``nx`` measures the execution time of a shell command, similar to the ``time`` 
+utility. The added value of ``nx`` is the ability to run the command more than 
+once and collect statistics, that is average, min and max execution times.
+
+Example Usage
+-------------------------------------------------
+
+Execute and measure times of 10 runs:
+
+  nx -n 10 sleep 1
