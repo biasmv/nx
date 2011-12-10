@@ -133,58 +133,9 @@ int parse_options(int argc, char **argv)
   return optind;
 }
 
-int main(int argc, char **argv)
+void collect_statistics(CallStatP call_stats)
 {
-  g_program_name=argv[0];
-  
-  int consumed_args=parse_options(argc, argv);
-  /* 
-     if we get here, all parameters have been parsed correctly. skip used 
-     parameters. Everything that is left is the command we would like to 
-     execute.
-   */
-  argc-=consumed_args;
-  argv+=consumed_args;
-  
-  
-  int pid=0, status=0;
-  struct timeval before, after;
-  struct rusage ru;
-  CallStatP call_stats=(CallStatP)malloc(sizeof(CallStat)*g_num_repeats);
-  callstat_print_head(g_output_stream, g_output_format);
   int i=0;
-  for (; i<g_num_repeats; ++i) {
-    gettimeofday(&before, NULL);
-    switch(pid = vfork()) {
-      case -1:
-        perror(g_program_name);
-        if (g_output_stream!=stdout) {
-          fclose(g_output_stream);
-        }
-        exit(1);
-      case 0:
-        execvp(*argv, argv);
-        perror(*argv);
-        _exit((errno == ENOENT) ? 127 : 126);
-    }
-
-    while (wait3(&status, 0, &ru) != pid);
-    
-    gettimeofday(&after, NULL);
-    if (!WIFEXITED(status))
-      fprintf(stderr, "Command terminated abnormally.\n");
-    
-    timersub(&after, &before, &after);
-
-    call_stats[i].real_time=timeval_to_sec(&after);
-    call_stats[i].user_time=timeval_to_sec(&ru.ru_utime);
-    call_stats[i].sys_time=timeval_to_sec(&ru.ru_stime);
-    char num_buf[10];
-    snprintf(num_buf, 10, "%d", i+1);
-    callstat_print(g_output_stream, &call_stats[i], num_buf, g_output_format);
-  }
-  callstat_print_sep(g_output_stream, g_output_format);
-  /* collect statistics */
   CallStat min=call_stats[0], max=call_stats[0], mean=call_stats[0];
   CallStat stddev;
   memset(&stddev, 0, sizeof(CallStat));
@@ -222,9 +173,70 @@ int main(int argc, char **argv)
   callstat_print(g_output_stream, &max, "max", g_output_format);
   callstat_print(g_output_stream, &stddev, "stddev", g_output_format);
   callstat_print_sep(g_output_stream, g_output_format);
+}
+
+void run_and_measure(int argc, char** argv, CallStatP call_stat_out)
+{
+  int pid=0, status=0;
+  struct timeval before, after;
+  struct rusage ru;
+  gettimeofday(&before, NULL);
+  switch(pid = vfork()) {
+    case -1:
+      perror(g_program_name);
+      if (g_output_stream!=stdout) {
+        fclose(g_output_stream);
+      }
+      exit(1);
+    case 0:
+      execvp(*argv, argv);
+      perror(*argv);
+      _exit((errno == ENOENT) ? 127 : 126);
+  }
+
+  while (wait3(&status, 0, &ru) != pid);
+  
+  gettimeofday(&after, NULL);
+  if (!WIFEXITED(status)) {
+    fprintf(stderr, "Command terminated abnormally.\n");
+    exit(-1);
+  }
+  
+  timersub(&after, &before, &after);
+
+  call_stat_out->real_time=timeval_to_sec(&after);
+  call_stat_out->user_time=timeval_to_sec(&ru.ru_utime);
+  call_stat_out->sys_time=timeval_to_sec(&ru.ru_stime);
+}
+
+int main(int argc, char **argv)
+{
+  g_program_name=argv[0];
+  
+  int consumed_args=parse_options(argc, argv);
+  /* 
+     if we get here, all parameters have been parsed correctly. skip used 
+     parameters. Everything that is left is the command we would like to 
+     execute.
+   */
+  argc-=consumed_args;
+  argv+=consumed_args;
+
+  CallStatP call_stats=(CallStatP)malloc(sizeof(CallStat)*g_num_repeats);
+  callstat_print_head(g_output_stream, g_output_format);
+  int i=0;
+  for (; i<g_num_repeats; ++i) {
+    run_and_measure(argc, argv, &call_stats[i]);
+    char num_buf[10];
+    snprintf(num_buf, 10, "%d", i+1);
+    callstat_print(g_output_stream, &call_stats[i], num_buf, g_output_format);
+  }
+  callstat_print_sep(g_output_stream, g_output_format);
+  /* collect statistics */
+  collect_statistics(call_stats);
   if (g_output_stream!=stdout) {
     fclose(g_output_stream);    
   }
-
-  exit (WIFEXITED(status) ? WEXITSTATUS(status) : EXIT_FAILURE);
+  free(call_stats);
+  return 0;
 }
