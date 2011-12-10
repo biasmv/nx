@@ -91,7 +91,8 @@ int main(int argc, char ** argv)
   int opt=0;
   CallStatFormat fmt=CSF_HUMAN;
   const char* program_name=argv[0];
-  while ((opt = getopt(argc, argv, "hcn:")) != -1) {
+  FILE* fd=stdout;
+  while ((opt = getopt(argc, argv, "hcn:o:")) != -1) {
     switch(opt) {
     case 'n':
       repeats=strtol(optarg, &end_ptr, 10);
@@ -107,6 +108,12 @@ int main(int argc, char ** argv)
     case 'h':
      fmt=CSF_HUMAN;
      break;
+    case 'o':
+      if (!(fd=fopen(optarg, "w+"))) {
+        perror("Can't open file for writing");
+        usage(program_name);
+      }
+      break;
     case 'c':
       fmt=CSF_CSV;
       break;
@@ -123,13 +130,16 @@ int main(int argc, char ** argv)
 
   int repeat=0;
   CallStatP call_stats=(CallStatP)malloc(sizeof(CallStat)*repeats);
-  callstat_print_head(stdout, fmt);
+  callstat_print_head(fd, fmt);
 
   for (; repeat<repeats; ++repeat) {
     gettimeofday(&before, NULL);
     switch(pid = vfork()) {
       case -1:
         perror(program_name);
+        if (fd!=stdout) {
+          fclose(fd);
+        }
         exit(1);
       case 0:
         execvp(*argv, argv);
@@ -148,9 +158,9 @@ int main(int argc, char ** argv)
     call_stats[repeat].sys_time=timeval_to_sec(&ru.ru_stime);
     char num_buf[10];
     snprintf(num_buf, 10, "%d", repeat+1);
-    callstat_print(stdout, &call_stats[repeat], num_buf, fmt);
+    callstat_print(fd, &call_stats[repeat], num_buf, fmt);
   }
-  callstat_print_sep(stdout, fmt);
+  callstat_print_sep(fd, fmt);
   /* collect statistics */
   CallStat min=call_stats[0], max=call_stats[0], mean=call_stats[0];
   CallStat stddev;
@@ -185,10 +195,14 @@ int main(int argc, char ** argv)
   stddev.real_time=sqrt(stddev.real_time/repeats);
   stddev.user_time=sqrt(stddev.user_time/repeats);
   stddev.sys_time=sqrt(stddev.sys_time/repeats);
-  callstat_print(stdout, &mean, "mean", fmt);
-  callstat_print(stdout, &min, "min", fmt);
-  callstat_print(stdout, &max, "max", fmt);
-  callstat_print(stdout, &stddev, "stddev", fmt);
-  callstat_print_sep(stdout, fmt);
+  callstat_print(fd, &mean, "mean", fmt);
+  callstat_print(fd, &min, "min", fmt);
+  callstat_print(fd, &max, "max", fmt);
+  callstat_print(fd, &stddev, "stddev", fmt);
+  callstat_print_sep(fd, fmt);
+  if (fd!=stdout) {
+    fclose(fd);    
+  }
+
   exit (WIFEXITED(status) ? WEXITSTATUS(status) : EXIT_FAILURE);
 }
