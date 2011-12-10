@@ -75,70 +75,91 @@ void callstat_print(FILE* fd, CallStatP call_stat, const char* name,
   }
 }
 
-int main(int argc, char ** argv)
+/*
+   global variables
+ */
+
+char* g_program_name=NULL;
+int g_num_repeats=10;
+int g_output_format=CSF_HUMAN;
+FILE* g_output_stream=NULL;
+
+int parse_options(int argc, char **argv)
 {
-  int repeats=10;
+  /* 
+     if the program name is of the form <num>x, use <num> as the default number 
+     of repeats
+   */
   char* end_ptr;
   int x=strtol(argv[0], &end_ptr, 10);
   if (*end_ptr=='x' && *(end_ptr+1)=='\0') {
-    repeats=x;
+    g_num_repeats=x;
   }
-  int pid=0;
-
-  int status=0;
-  struct timeval before, after;
-  struct rusage ru;
   int opt=0;
-  CallStatFormat fmt=CSF_HUMAN;
-  const char* program_name=argv[0];
-  FILE* fd=stdout;
+  g_output_stream=stdout;
   while ((opt = getopt(argc, argv, "hcn:o:")) != -1) {
     switch(opt) {
       case 'n':
-        repeats=strtol(optarg, &end_ptr, 10);
+        g_num_repeats=strtol(optarg, &end_ptr, 10);
         if (*end_ptr!='\0') {
           fprintf(stderr, "invalid integer literal for -n parameter.\n");
-          usage(program_name);
+          usage(g_program_name);
         }
-        if (repeats<=0 || repeats>10000) {
-          fprintf(stderr, "invalid value for -n parameter. Must be in the range [1-10000].\n");
-          usage(program_name);
+        if (g_num_repeats<=0 || g_num_repeats>10000) {
+          fprintf(stderr, "Repeats must be in the range [1-10000].\n");
+          usage(g_program_name);
         }
         break;
       case 'h':
-       fmt=CSF_HUMAN;
+       g_output_format=CSF_HUMAN;
        break;
       case 'o':
-        if (!(fd=fopen(optarg, "w+"))) {
-          perror("Can't open file for writing");
-          usage(program_name);
+        if (!(g_output_stream=fopen(optarg, "w+"))) {
+          perror("Can't open file");
+          usage(g_program_name);
         }
         break;
       case 'c':
-        fmt=CSF_CSV;
+        g_output_format=CSF_CSV;
         break;
       case '?':
       default:
-        usage(program_name);
+        usage(g_program_name);
     }
   }
-  if (!(argc -= optind)) {
-    usage(program_name); 
+  if (argc-optind==0) {
+    usage(g_program_name); 
   }
-  /* skip all processed parameters. */
-  argv += optind;
+  return optind;
+}
 
-  int repeat=0;
-  CallStatP call_stats=(CallStatP)malloc(sizeof(CallStat)*repeats);
-  callstat_print_head(fd, fmt);
-
-  for (; repeat<repeats; ++repeat) {
+int main(int argc, char **argv)
+{
+  g_program_name=argv[0];
+  
+  int consumed_args=parse_options(argc, argv);
+  /* 
+     if we get here, all parameters have been parsed correctly. skip used 
+     parameters. Everything that is left is the command we would like to 
+     execute.
+   */
+  argc-=consumed_args;
+  argv+=consumed_args;
+  
+  
+  int pid=0, status=0;
+  struct timeval before, after;
+  struct rusage ru;
+  CallStatP call_stats=(CallStatP)malloc(sizeof(CallStat)*g_num_repeats);
+  callstat_print_head(g_output_stream, g_output_format);
+  int i=0;
+  for (; i<g_num_repeats; ++i) {
     gettimeofday(&before, NULL);
     switch(pid = vfork()) {
       case -1:
-        perror(program_name);
-        if (fd!=stdout) {
-          fclose(fd);
+        perror(g_program_name);
+        if (g_output_stream!=stdout) {
+          fclose(g_output_stream);
         }
         exit(1);
       case 0:
@@ -148,25 +169,26 @@ int main(int argc, char ** argv)
     }
 
     while (wait3(&status, 0, &ru) != pid);
+    
     gettimeofday(&after, NULL);
     if (!WIFEXITED(status))
       fprintf(stderr, "Command terminated abnormally.\n");
+    
     timersub(&after, &before, &after);
 
-    call_stats[repeat].real_time=timeval_to_sec(&after);
-    call_stats[repeat].user_time=timeval_to_sec(&ru.ru_utime);
-    call_stats[repeat].sys_time=timeval_to_sec(&ru.ru_stime);
+    call_stats[i].real_time=timeval_to_sec(&after);
+    call_stats[i].user_time=timeval_to_sec(&ru.ru_utime);
+    call_stats[i].sys_time=timeval_to_sec(&ru.ru_stime);
     char num_buf[10];
-    snprintf(num_buf, 10, "%d", repeat+1);
-    callstat_print(fd, &call_stats[repeat], num_buf, fmt);
+    snprintf(num_buf, 10, "%d", i+1);
+    callstat_print(g_output_stream, &call_stats[i], num_buf, g_output_format);
   }
-  callstat_print_sep(fd, fmt);
+  callstat_print_sep(g_output_stream, g_output_format);
   /* collect statistics */
   CallStat min=call_stats[0], max=call_stats[0], mean=call_stats[0];
   CallStat stddev;
   memset(&stddev, 0, sizeof(CallStat));
-  int i;
-  for (i=1; i<repeats; ++i) {
+  for (i=1; i<g_num_repeats; ++i) {
     min.real_time=minf(min.real_time, call_stats[i].real_time);
     min.user_time=minf(min.user_time, call_stats[i].user_time);
     min.sys_time=minf(min.sys_time, call_stats[i].sys_time);
@@ -180,11 +202,11 @@ int main(int argc, char ** argv)
     mean.sys_time+=call_stats[i].sys_time;
   }
   
-  mean.real_time/=repeats;
-  mean.user_time/=repeats;
-  mean.sys_time/=repeats;
+  mean.real_time/=g_num_repeats;
+  mean.user_time/=g_num_repeats;
+  mean.sys_time/=g_num_repeats;
   
-  for (i=0; i<repeats; ++i) {
+  for (i=0; i<g_num_repeats; ++i) {
     float d1=call_stats[i].real_time-mean.real_time;
     stddev.real_time+=d1*d1;
     float d2=call_stats[i].user_time-mean.user_time;
@@ -192,16 +214,16 @@ int main(int argc, char ** argv)
     float d3=call_stats[i].sys_time-mean.sys_time;
     stddev.sys_time+=d3*d3;
   }
-  stddev.real_time=sqrt(stddev.real_time/repeats);
-  stddev.user_time=sqrt(stddev.user_time/repeats);
-  stddev.sys_time=sqrt(stddev.sys_time/repeats);
-  callstat_print(fd, &mean, "mean", fmt);
-  callstat_print(fd, &min, "min", fmt);
-  callstat_print(fd, &max, "max", fmt);
-  callstat_print(fd, &stddev, "stddev", fmt);
-  callstat_print_sep(fd, fmt);
-  if (fd!=stdout) {
-    fclose(fd);    
+  stddev.real_time=sqrt(stddev.real_time/g_num_repeats);
+  stddev.user_time=sqrt(stddev.user_time/g_num_repeats);
+  stddev.sys_time=sqrt(stddev.sys_time/g_num_repeats);
+  callstat_print(g_output_stream, &mean, "mean", g_output_format);
+  callstat_print(g_output_stream, &min, "min", g_output_format);
+  callstat_print(g_output_stream, &max, "max", g_output_format);
+  callstat_print(g_output_stream, &stddev, "stddev", g_output_format);
+  callstat_print_sep(g_output_stream, g_output_format);
+  if (g_output_stream!=stdout) {
+    fclose(g_output_stream);    
   }
 
   exit (WIFEXITED(status) ? WEXITSTATUS(status) : EXIT_FAILURE);
