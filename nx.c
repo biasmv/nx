@@ -1,4 +1,3 @@
-#include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -91,18 +90,18 @@ int main(int argc, char ** argv)
   struct rusage ru;
   int opt=0;
   CallStatFormat fmt=CSF_HUMAN;
-
+  const char* program_name=argv[0];
   while ((opt = getopt(argc, argv, "hcn:")) != -1) {
     switch(opt) {
     case 'n':
       repeats=strtol(optarg, &end_ptr, 10);
       if (*end_ptr!='\0') {
         fprintf(stderr, "invalid integer literal for -n parameter.\n");
-        usage(argv[0]);
+        usage(program_name);
       }
       if (repeats<=0 || repeats>10000) {
         fprintf(stderr, "invalid value for -n parameter. Must be in the range [1-10000].\n");
-        usage(argv[0]);
+        usage(program_name);
       }
       break;
     case 'h':
@@ -113,11 +112,11 @@ int main(int argc, char ** argv)
       break;
     case '?':
     default:
-      usage(argv[0]);
+      usage(program_name);
     }
   }
   if (!(argc -= optind)) {
-    usage(argv[0]); 
+    usage(program_name); 
   }
   /* skip all processed parameters. */
   argv += optind;
@@ -130,7 +129,7 @@ int main(int argc, char ** argv)
     gettimeofday(&before, NULL);
     switch(pid = vfork()) {
       case -1:
-        perror("nx");
+        perror(program_name);
         exit(1);
       case 0:
         execvp(*argv, argv);
