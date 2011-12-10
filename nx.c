@@ -94,32 +94,32 @@ int main(int argc, char ** argv)
   FILE* fd=stdout;
   while ((opt = getopt(argc, argv, "hcn:o:")) != -1) {
     switch(opt) {
-    case 'n':
-      repeats=strtol(optarg, &end_ptr, 10);
-      if (*end_ptr!='\0') {
-        fprintf(stderr, "invalid integer literal for -n parameter.\n");
+      case 'n':
+        repeats=strtol(optarg, &end_ptr, 10);
+        if (*end_ptr!='\0') {
+          fprintf(stderr, "invalid integer literal for -n parameter.\n");
+          usage(program_name);
+        }
+        if (repeats<=0 || repeats>10000) {
+          fprintf(stderr, "invalid value for -n parameter. Must be in the range [1-10000].\n");
+          usage(program_name);
+        }
+        break;
+      case 'h':
+       fmt=CSF_HUMAN;
+       break;
+      case 'o':
+        if (!(fd=fopen(optarg, "w+"))) {
+          perror("Can't open file for writing");
+          usage(program_name);
+        }
+        break;
+      case 'c':
+        fmt=CSF_CSV;
+        break;
+      case '?':
+      default:
         usage(program_name);
-      }
-      if (repeats<=0 || repeats>10000) {
-        fprintf(stderr, "invalid value for -n parameter. Must be in the range [1-10000].\n");
-        usage(program_name);
-      }
-      break;
-    case 'h':
-     fmt=CSF_HUMAN;
-     break;
-    case 'o':
-      if (!(fd=fopen(optarg, "w+"))) {
-        perror("Can't open file for writing");
-        usage(program_name);
-      }
-      break;
-    case 'c':
-      fmt=CSF_CSV;
-      break;
-    case '?':
-    default:
-      usage(program_name);
     }
   }
   if (!(argc -= optind)) {
