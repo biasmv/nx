@@ -2,7 +2,7 @@ CFLAGS=-O2 -DNDEBUG
 PREFIX=/usr/local
 
 nx: nx.c
-	${CC} -lm -o nx nx.c ${CFLAGS}
+	${CC} -lm -Wall -o nx nx.c ${CFLAGS}
 clean:
 	rm -f nx
 all: nx
