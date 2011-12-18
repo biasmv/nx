@@ -1,0 +1,6 @@
+exclude = "nx"
+
+softWrap = false
+softTabs = true
+tabWidth = 2
+showInvisibles   = true
