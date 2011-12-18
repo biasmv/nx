@@ -9,6 +9,7 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <fcntl.h>
 
 void usage(const char* prog_name)
 {
@@ -80,6 +81,7 @@ void callstat_print(FILE* fd, CallStatP call_stat, const char* name,
  */
 
 char* g_program_name=NULL;
+int g_silent=0;
 int g_num_repeats=10;
 int g_output_format=CSF_HUMAN;
 FILE* g_output_stream=NULL;
@@ -97,7 +99,7 @@ int parse_options(int argc, char **argv)
   }
   int opt=0;
   g_output_stream=stdout;
-  while ((opt = getopt(argc, argv, "hcn:o:")) != -1) {
+  while ((opt = getopt(argc, argv, "shcn:o:")) != -1) {
     switch(opt) {
       case 'n':
         g_num_repeats=strtol(optarg, &end_ptr, 10);
@@ -110,6 +112,9 @@ int parse_options(int argc, char **argv)
           usage(g_program_name);
         }
         break;
+      case 's':
+        g_silent=1;
+        break; 
       case 'h':
        g_output_format=CSF_HUMAN;
        break;
@@ -180,6 +185,7 @@ void run_and_measure(int argc, char** argv, CallStatP call_stat_out)
   int pid=0, status=0;
   struct timeval before, after;
   struct rusage ru;
+
   gettimeofday(&before, NULL);
   switch(pid = vfork()) {
     case -1:
@@ -189,6 +195,15 @@ void run_and_measure(int argc, char** argv, CallStatP call_stat_out)
       }
       exit(1);
     case 0:
+      if (g_silent) {
+        int stdout_err_fd=0;
+        if((stdout_err_fd = open("/dev/null", O_RDWR))==-1){ 
+          perror("can't redirect output/errors to /dev/null");
+          exit(-1);
+        }
+        dup2(stdout_err_fd, STDOUT_FILENO); 
+        dup2(stdout_err_fd, STDERR_FILENO);
+      }
       execvp(*argv, argv);
       perror(*argv);
       _exit((errno == ENOENT) ? 127 : 126);
